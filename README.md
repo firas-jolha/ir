@@ -1,1 +1,1 @@
-# ir
+# Information Retrieval Lab Materials
