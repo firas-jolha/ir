@@ -1,10 +1,16 @@
 #!/bin/sh
 
+# if you have .toml project
+uv sync
+
+# OR
+
 # Initialize the repository
-uv init -q --description "Information Retrieval Workspace" . 
+uv init 
+
 
 # Create a virtual environment
-uv venv .venv
+uv venv
 
 # Activate the venv
-# . .venv/bin/activate
+# source .venv/bin/activate
