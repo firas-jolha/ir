@@ -1,0 +1,640 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Tree Based NNs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: lab-bench console. Data bar on top, caption + transport, then plane (left) and tree + search state (right). */
+:root {
+  --bg: #EEF1F5; --panel: #FFFFFF; --ink: #14213D; --muted: #5B6577; --line: #D5DAE3;
+  --accent: #C8571B; --accent-soft: rgba(200,87,27,.14); --blue: #2F6FDE; --blue-soft: rgba(47,111,222,.12);
+  --teal: #1F7A6B; --teal-soft: rgba(31,122,107,.10); --violet: #7B4FA0; --gold: #F2C94C; --prune: #9AA1AC; --prune-soft: rgba(120,128,140,.20);
+  --grid: #E6E9EF; --ok: #1F7A4D; --warn: #B42318;
+  --f-ui: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; --f-mono: "IBM Plex Mono", "DejaVu Sans Mono", monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0F1522; --panel: #172033; --ink: #E7ECF5; --muted: #9AA6BA; --line: #2B3650;
+  --accent: #F08A4B; --accent-soft: rgba(240,138,75,.18); --blue: #6F9BFF; --blue-soft: rgba(111,155,255,.16);
+  --teal: #4DB8A6; --teal-soft: rgba(77,184,166,.14); --violet: #B48CE0; --gold: #F2C94C; --prune: #6B7486; --prune-soft: rgba(140,150,170,.18);
+  --grid: #222C42; --ok: #5BD69A; --warn: #FF8A7A; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0F1522; --panel: #172033; --ink: #E7ECF5; --muted: #9AA6BA; --line: #2B3650;
+  --accent: #F08A4B; --accent-soft: rgba(240,138,75,.18); --blue: #6F9BFF; --blue-soft: rgba(111,155,255,.16);
+  --teal: #4DB8A6; --teal-soft: rgba(77,184,166,.14); --violet: #B48CE0; --gold: #F2C94C; --prune: #6B7486; --prune-soft: rgba(140,150,170,.18);
+  --grid: #222C42; --ok: #5BD69A; --warn: #FF8A7A; color-scheme: dark; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-ui); font-size: 15px; }
+.wrap { max-width: 1260px; margin: 0 auto; padding-block: 20px 28px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.eyebrow { font-size: 12px; letter-spacing: 1.6px; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+h1 { font-size: 26px; margin: 2px 0 0; text-wrap: balance; }
+.sub { color: var(--muted); margin-top: 2px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tab { font: 600 14px var(--f-ui); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; cursor: pointer; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.tab:focus-visible, .btn:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; min-width: 0; }
+.cardtitle { font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); font-weight: 600; margin: 0 0 8px 2px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+/* data editor */
+.data { display: flex; flex-direction: column; gap: 10px; }
+.drow { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.field { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.field select, .field input { font: 14px var(--f-mono); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; }
+.field input[type=number] { width: 64px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 10px; padding: 3px 4px 3px 8px; background: var(--bg); }
+.chip.qchip { border-color: var(--gold); background: rgba(242,201,76,.16); }
+.chip b { font-family: var(--f-mono); min-width: 14px; }
+.chip input { width: 50px; font: 13px var(--f-mono); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 3px 4px; }
+.chip button { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 15px; padding: 2px 6px; border-radius: 6px; }
+.chip button:hover { color: var(--warn); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { font: 600 13px var(--f-ui); border: 0; background: var(--panel); color: var(--ink); padding: 6px 10px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+.msg { font-size: 13px; color: var(--muted); }
+.msg.err { color: var(--warn); font-weight: 600; }
+.truth { font-family: var(--f-mono); font-size: 13px; color: var(--muted); }
+.truth b { color: var(--ink); }
+/* caption + controls */
+.caption { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 4px 14px; align-items: start; }
+.phase { font: 600 12px var(--f-ui); letter-spacing: 1px; text-transform: uppercase; padding: 5px 10px; border-radius: 999px; background: var(--blue-soft); color: var(--blue); white-space: nowrap; }
+.phase.query { background: var(--accent-soft); color: var(--accent); }
+.phase.result { background: var(--ink); color: var(--panel); }
+#stepTitle { font-size: 18px; font-weight: 700; margin: 0; }
+#stepText { grid-column: 1 / -1; line-height: 1.55; max-width: 1100px; overflow-wrap: anywhere; }
+#stepText code { font-family: var(--f-mono); font-size: 13.5px; background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+.ok { color: var(--ok); font-weight: 700; } .bad { color: var(--warn); font-weight: 700; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.btn { font: 600 14px var(--f-ui); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; cursor: pointer; }
+.btn.sm { font-size: 13px; padding: 6px 10px; }
+.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); min-width: 92px; }
+.btn:disabled { opacity: .4; cursor: default; }
+#scrub { flex: 1 1 200px; accent-color: var(--accent); }
+.counter { font-family: var(--f-mono); color: var(--muted); font-size: 13px; min-width: 64px; text-align: right; }
+.hint { color: var(--muted); font-size: 12.5px; }
+/* stage */
+.stage { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 14px; }
+.right { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+svg { display: block; width: 100%; height: auto; }
+#plane { max-width: 620px; margin: 0 auto; cursor: crosshair; touch-action: manipulation; }
+.treebox { overflow-x: auto; }
+#tree { min-width: 420px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: 12.5px; margin: 6px 4px 0; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.state { display: grid; grid-template-columns: 1fr auto; gap: 10px 16px; align-items: start; }
+.best { display: flex; flex-direction: column; gap: 6px; }
+.slot { display: flex; align-items: center; justify-content: space-between; border: 1px dashed var(--line); border-radius: 8px; padding: 5px 10px; font-family: var(--f-mono); font-size: 14px; min-height: 32px; }
+.slot.filled { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+.slot .lbl { color: var(--muted); font-family: var(--f-ui); font-size: 12px; }
+.metric { text-align: right; }
+.metric .v { font-family: var(--f-mono); font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.metric .k { font-size: 12px; color: var(--muted); }
+.queue { width: 100%; border-collapse: collapse; font-size: 13px; }
+.queue th, .queue td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.queue td.num { font-family: var(--f-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.queue tr.top td { background: var(--accent-soft); font-weight: 600; }
+.cands { font-family: var(--f-mono); margin-top: 8px; font-size: 14px; overflow-wrap: anywhere; }
+/* SVG */
+.gridl { stroke: var(--grid); stroke-width: 1; }
+.axis { fill: var(--muted); font: 11px var(--f-mono); }
+.frame { fill: transparent; stroke: var(--line); }
+.pt { transition: fill .45s, r .45s; stroke: var(--panel); stroke-width: 2; }
+.pt.n { fill: var(--ink); } .pt.best { fill: var(--accent); r: 9; } .pt.meas { fill: var(--accent); opacity: .55; }
+.pt.off { fill: var(--prune); opacity: .6; } .pt.ga { fill: var(--blue); } .pt.gb { fill: var(--accent); }
+.pt.vant { fill: var(--teal); r: 10; } .pt.pair { fill: var(--violet); r: 9; }
+.ptl { font: 700 14px var(--f-ui); fill: var(--ink); paint-order: stroke; stroke: var(--panel); stroke-width: 3px; transition: fill .45s; pointer-events: none; }
+.ptl.off { fill: var(--prune); } .ptl.best { fill: var(--accent); } .ptl.ga { fill: var(--blue); } .ptl.gb { fill: var(--accent); } .ptl.vant { fill: var(--teal); } .ptl.pair { fill: var(--violet); }
+.qstar { fill: var(--gold); stroke: var(--ink); stroke-width: 1.5; pointer-events: none; }
+.qlabel { font: 700 15px var(--f-ui); fill: var(--ink); paint-order: stroke; stroke: var(--panel); stroke-width: 3px; pointer-events: none; }
+.sh { transition: opacity .5s, r .7s ease, cx .7s ease, cy .7s ease, fill .5s, stroke .5s; pointer-events: none; }
+.cut { stroke: var(--accent); stroke-width: 3.4; } .cut2 { stroke: var(--blue); stroke-width: 2.8; }
+.cut3 { stroke: var(--teal); stroke-width: 2.3; } .cut4 { stroke: var(--violet); stroke-width: 2; }
+.cutfaint { stroke: var(--muted); stroke-width: 1.5; opacity: .5; } .cuthot { stroke: var(--accent); stroke-width: 5; }
+.dist { stroke: var(--accent); stroke-width: 2.3; } .distg { stroke: var(--prune); stroke-width: 1.7; stroke-dasharray: 4 4; }
+.gap { stroke: var(--ink); stroke-width: 2.3; } .helper { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 3 5; fill: none; }
+.tau { fill: none; stroke: var(--accent); stroke-width: 2.3; stroke-dasharray: 9 7; }
+.ball { fill: var(--blue-soft); stroke: var(--blue); stroke-width: 2.3; } .ballb { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2.3; }
+.ballroot { fill: none; stroke: var(--ink); stroke-width: 2.2; } .ballfaint { fill: none; stroke: var(--muted); stroke-width: 1.3; opacity: .55; }
+.ballcur { fill: var(--blue-soft); stroke: var(--blue); stroke-width: 3; }
+.ballprune { fill: var(--prune-soft); stroke: var(--prune); stroke-width: 2; stroke-dasharray: 6 5; }
+.mu { fill: var(--blue-soft); stroke: var(--blue); stroke-width: 2.4; } .mufaint { fill: none; stroke: var(--muted); stroke-width: 1.3; opacity: .55; }
+.muprune { fill: none; stroke: var(--prune); stroke-width: 2; stroke-dasharray: 6 5; }
+.focus { fill: var(--accent-soft); } .tinta { fill: var(--blue-soft); } .tintb { fill: var(--accent-soft); }
+.prunezone { fill: var(--prune-soft); stroke: var(--prune); stroke-width: 1.2; }
+.cell { fill: var(--accent-soft); } .cellq { fill: var(--blue-soft); }
+.lab { font: 600 12.5px var(--f-ui); fill: var(--ink); paint-order: stroke; stroke: var(--panel); stroke-width: 4px; }
+.lab.acc { fill: var(--accent); } .lab.blue { fill: var(--blue); } .lab.mut { fill: var(--muted); } .lab.teal { fill: var(--teal); }
+.cmark { stroke: var(--ink); stroke-width: 2.2; }
+.enter-line { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw .8s ease forwards; }
+.enter-fade { animation: fadein .6s ease both; }
+.enter-pop { transform-box: fill-box; transform-origin: center; animation: pop .6s cubic-bezier(.2,.9,.3,1.3) both; }
+@keyframes draw { to { stroke-dashoffset: 0; } } @keyframes fadein { from { opacity: 0; } } @keyframes pop { from { opacity: 0; transform: scale(.2); } }
+.leaving { opacity: 0 !important; transition: opacity .35s; }
+.tedge { stroke: var(--line); stroke-width: 2; } .tedge.on { stroke: var(--accent); stroke-width: 2.6; } .tedge.off { stroke-dasharray: 5 5; }
+.tnode rect { fill: var(--panel); stroke: var(--ink); stroke-width: 1.5; transition: fill .4s, stroke .4s; }
+.tnode text { font: 600 12px var(--f-ui); fill: var(--ink); }
+.tnode.cur rect { fill: var(--gold); stroke: var(--ink); stroke-width: 2.5; } .tnode.cur text { fill: #14213D; }
+.tnode.visit rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.tnode.res rect { fill: var(--accent); stroke: var(--accent); } .tnode.res text { fill: #fff; }
+.tnode.prune rect { fill: var(--prune-soft); stroke: var(--prune); stroke-dasharray: 5 4; } .tnode.prune text { fill: var(--prune); }
+.tnode.queued rect { stroke: var(--blue); stroke-width: 2.4; stroke-dasharray: 3 3; }
+.tnode.cand rect { fill: var(--blue-soft); stroke: var(--blue); stroke-width: 2.2; }
+.elab { font: 10.5px var(--f-mono); fill: var(--muted); } .ttitle { font: 600 12px var(--f-ui); fill: var(--muted); letter-spacing: 1px; }
+@media (max-width: 860px) { .stage { grid-template-columns: minmax(0,1fr); } }
+@media (prefers-reduced-motion: reduce) { .enter-line, .enter-fade, .enter-pop { animation: none; stroke-dashoffset: 0; } .sh, .pt { transition: none; } }
+
+hr {
+  border: none;
+  border-top: 1px solid #ccc; /* Sets the line color and thickness */
+  margin: 20px 0;             /* Adds vertical spacing */
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">Firas Jolha @ Information Retrieval - Lab 08</div>
+      <hr>
+      <h1>Tree Based NNs - Part 1</h1>
+      <div class="sub">Enter your own 2-D points and a query, choose k, and watch each index get built and searched step by step.</div>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Algorithm">
+      <button class="tab" role="tab" id="tab-kd" data-alg="kd">KD-tree</button>
+      <button class="tab" role="tab" id="tab-ball" data-alg="ball">Ball tree</button>
+    </div>
+  </header>
+
+  <section class="card data" aria-label="Your data">
+    <div class="cardtitle"><span>Your data · up to 16 points in the square 0–10</span><span id="npts"></span></div>
+    <div class="chips" id="chips"></div>
+    <div class="drow">
+      <span class="field">Click on the space to
+        <span class="seg" role="group" aria-label="Click mode"><button id="modeAdd" aria-pressed="true">add a point</button><button id="modeQ" aria-pressed="false">move q</button></span>
+      </span>
+      <button class="btn sm" id="addPt">+ Add point</button>
+      <button class="btn sm" id="randPts">Random points</button>
+      <button class="btn sm" id="labEx">Lab example</button>
+      <button class="btn sm" id="clearPts">Clear</button>
+      <label class="field" for="kSel">top-k <select id="kSel"></select></label>
+    </div>
+    <div class="drow"><span class="msg" id="msg">Leaves hold at most 2 points. Coordinates are rounded to 0.1.</span></div>
+    <div class="truth" id="truth"></div>
+  </section>
+
+  <div class="card caption" aria-live="polite">
+    <span class="phase" id="phase">Build</span>
+    <h2 id="stepTitle"></h2>
+    <div id="stepText"></div>
+  </div>
+
+  <div class="controls card">
+    <button class="btn" id="first" aria-label="First step">⏮</button>
+    <button class="btn" id="prev">◀ Prev</button>
+    <button class="btn primary" id="play">▶ Play</button>
+    <button class="btn" id="next">Next ▶</button>
+    <button class="btn" id="toQuery" title="Skip the build and jump to the first query step">Jump to query</button>
+    <input type="range" id="scrub" min="0" max="1" value="0" aria-label="Step">
+    <span class="counter" id="counter">1 / 1</span>
+    <label class="field" for="speedSel">Speed <select id="speedSel"><option value="5200">Slow</option><option value="3600" selected>Normal</option><option value="2000">Fast</option></select></label>
+    <span class="hint">Keys: ← → step · space play/pause</span>
+  </div>
+
+  <div class="stage">
+    <div class="card">
+      <div class="cardtitle"><span>The space</span><span id="planeTag"></span></div>
+      <svg id="plane" viewBox="0 0 540 540" role="img" aria-label="Points in the plane with the current step drawn. Click to add a point or move the query."></svg>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--ink)"></i>point</span>
+        <span><svg width="14" height="14" viewBox="0 0 14 14" style="display:inline;width:14px"><polygon points="7,1 8.8,5 13,5.3 9.8,8.2 10.8,12.6 7,10.3 3.2,12.6 4.2,8.2 1,5.3 5.2,5" fill="var(--gold)" stroke="var(--ink)"/></svg>query q</span>
+        <span><i class="dot" style="background:var(--accent)"></i>measured / in best-k</span>
+        <span><i class="dot" style="background:var(--prune)"></i>pruned (never measured)</span>
+        <span><svg width="22" height="10" style="display:inline;width:22px"><line x1="0" y1="5" x2="22" y2="5" stroke="var(--accent)" stroke-width="2.4" stroke-dasharray="6 4"/></svg>τ circle</span>
+      </div>
+    </div>
+    <div class="right">
+      <div class="card">
+        <div class="cardtitle"><span id="treeTitle">The tree</span></div>
+        <div class="treebox"><svg id="tree" viewBox="0 0 560 250" role="img" aria-label="Tree diagram with the current node highlighted"></svg></div>
+      </div>
+      <div class="card">
+        <div class="cardtitle"><span id="stateTitle">Search state</span></div>
+        <div id="state"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+const NS = "http://www.w3.org/2000/svg";
+const MAXP = 16, LEAF = 2;
+const S = 48, PAD = 30;
+const X = x => PAD + x * S, Y = y => PAD + (10 - y) * S;
+const f2 = v => (Math.abs(v) < 5e-10 ? 0 : v).toFixed(2);
+const fc = v => String(Math.round(v * 100) / 100);
+const sg = v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(2);
+const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+
+/* ================= data ================= */
+const LAB = { pts: [[1,9],[3,6],[6,8],[9,7],[7,4],[2,3],[4,2],[8,5]], q: [2,7], k: 2 };
+let data = { pts: LAB.pts.map(p => p.slice()), q: LAB.q.slice(), k: 2, trees: 2, searchK: 0, seed: 3 };
+try { const s = JSON.parse(localStorage.getItem("tsa-data") || "null"); if (s && Array.isArray(s.pts) && s.pts.length <= MAXP) data = Object.assign(data, s); } catch (e) {}
+const nm = i => String.fromCharCode(65 + i);
+const set = idx => "{" + idx.map(nm).join(",") + "}";
+const setShort = idx => idx.length <= 5 ? set(idx) : `{${idx.length} pts}`;
+let PT = [];   // [[x,y], ...]
+let Q = [0, 0];
+
+/* ================= shapes ================= */
+const line = (id, x1, y1, x2, y2, cls = "cut") => ({ id, t: "line", x1, y1, x2, y2, cls });
+const circ = (id, cx, cy, r, cls = "ball") => ({ id, t: "circle", cx, cy, r, cls });
+const rect = (id, x0, y0, x1, y1, cls = "focus") => ({ id, t: "rect", x0, y0, x1, y1, cls });
+const text = (id, x, y, s, cls = "lab", anchor = "start", dx = 0, dy = 0) => ({ id, t: "text", x, y, s, cls, anchor, dx, dy });
+const poly = (id, pts, cls = "cell") => ({ id, t: "poly", pts, cls });
+const mark = (id, x, y) => ({ id, t: "mark", x, y });
+const tauC = r => isFinite(r) ? [circ("tau", Q[0], Q[1], r, "tau")] : [];
+function distLines(bestIdx, curIdx) {
+  const out = [], seen = new Set();
+  bestIdx.forEach(i => { seen.add(i); const p = PT[i]; out.push(line("d" + i, Q[0], Q[1], p[0], p[1], "dist"), text("dt" + i, (Q[0] + p[0]) / 2, (Q[1] + p[1]) / 2, f2(dist(Q, p)), "lab acc", "middle", 0, -5)); });
+  curIdx.forEach(i => { if (seen.has(i)) return; const p = PT[i]; out.push(line("d" + i, Q[0], Q[1], p[0], p[1], "distg"), text("dt" + i, (Q[0] + p[0]) / 2, (Q[1] + p[1]) / 2, f2(dist(Q, p)), "lab mut", "middle", 0, -5)); });
+  return out;
+}
+
+/* ================= best-k tracker ================= */
+class Best {
+  constructor(k) { this.k = k; this.list = []; }
+  full() { return this.list.length >= this.k; }
+  tau() { return this.full() ? this.list[this.k - 1][1] : Infinity; }
+  offer(i, d) { // returns description
+    if (this.list.some(e => e[0] === i)) return `${nm(i)} is already in best`;
+    if (!this.full()) { this.list.push([i, d]); this.list.sort((a, b) => a[1] - b[1] || a[0] - b[0]); return `best not full → add ${nm(i)}`; }
+    const worst = this.list[this.k - 1];
+    if (d < worst[1]) { this.list[this.k - 1] = [i, d]; this.list.sort((a, b) => a[1] - b[1] || a[0] - b[0]); return `${f2(d)} < τ = ${f2(worst[1])} → ${nm(i)} replaces ${nm(worst[0])}`; }
+    return `${f2(d)} ≥ τ = ${f2(worst[1])} → no change`;
+  }
+  snap() { return this.list.map(e => e.slice()); }
+  idx() { return this.list.map(e => e[0]); }
+}
+const tauTxt = b => b.full() ? f2(b.tau()) : "∞";
+const truth = () => PT.map((p, i) => [i, dist(Q, p)]).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+function verdict(best) {
+  const tr = truth().slice(0, data.k), got = best.idx();
+  const hit = tr.filter(t => got.includes(t[0])).length;
+  const tied = tr.length && got.length === data.k && Math.abs(best.list[data.k - 1][1] - tr[data.k - 1][1]) < 1e-9;
+  if (hit === data.k || tied) return `<span class="ok">✓ Same as brute force</span> (recall@${data.k} = 1.00).`;
+  return `<span class="bad">✗ Differs from brute force</span>: recall@${data.k} = ${f2(hit / data.k)}. True top-${data.k}: ${tr.map(t => nm(t[0]) + " " + f2(t[1])).join(", ")}.`;
+}
+function ptsMap(best, measured, pruned, extra = {}) {
+  const m = {};
+  PT.forEach((_, i) => { const k = nm(i); if (best && best.idx().includes(i)) m[k] = "best"; else if (pruned.has(i)) m[k] = "off"; else if (measured.has(i)) m[k] = "meas"; });
+  return Object.assign(m, extra);
+}
+const mkStep = o => Object.assign({ phase: "build", q: true, shapes: [], pts: {}, tree: { show: null, st: {}, lab: {} }, best: null, tau: null, count: null, queue: null, cands: null }, o);
+
+/* ================= KD-tree ================= */
+function genKD() {
+  const n = PT.length, k = data.k; let nid = 0; const all = [];
+  function build(idx, b, depth, parent) {
+    const node = { id: "k" + (nid++), idx, b, depth, parent }; all.push(node);
+    if (idx.length <= LEAF) { node.leaf = true; return node; }
+    const xs = idx.map(i => PT[i][0]), ys = idx.map(i => PT[i][1]);
+    node.ext = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    node.sx = node.ext[1] - node.ext[0]; node.sy = node.ext[3] - node.ext[2];
+    node.axis = node.sx >= node.sy ? 0 : 1;
+    node.sorted = idx.slice().sort((i, j) => PT[i][node.axis] - PT[j][node.axis] || i - j);
+    // node.mid = Math.median(sorted);
+    node.mid = Math.floor(idx.length / 2); 
+    node.s = PT[node.sorted[node.mid]][node.axis];
+    const lb = { ...b }, rb = { ...b };
+    if (node.axis === 0) { lb.x1 = node.s; rb.x0 = node.s; } else { lb.y1 = node.s; rb.y0 = node.s; }
+    node.L = build(node.sorted.slice(0, node.mid), lb, depth + 1, node); node.R = build(node.sorted.slice(node.mid), rb, depth + 1, node);
+    return node;
+  }
+  const root = build(PT.map((_, i) => i), { x0: 0, x1: 10, y0: 0, y1: 10 }, 0, null);
+  const ax = a => a === 0 ? "x" : "y";
+  const done = new Set();
+  const cutOf = nd => { const b = nd.b, cls = ["cut", "cut2", "cut3", "cut4"][Math.min(nd.depth, 3)];
+    return nd.axis === 0 ? [line("c" + nd.id, nd.s, b.y0, nd.s, b.y1, cls), text("ct" + nd.id, nd.s, b.y1, "x=" + fc(nd.s), "lab mut", "start", 4, 14)]
+                         : [line("c" + nd.id, b.x0, nd.s, b.x1, nd.s, cls), text("ct" + nd.id, b.x0, nd.s, "y=" + fc(nd.s), "lab mut", "start", 4, -5)]; };
+  const cuts = () => all.filter(nd => done.has(nd.id)).flatMap(cutOf);
+  const spec = nd => nd.leaf ? { id: nd.id, label: [set(nd.idx)] }
+    : { id: nd.id, label: done.has(nd.id) ? [ax(nd.axis) + " = " + fc(nd.s)] : [setShort(nd.idx)],
+        kids: done.has(nd.id) ? [{ ...spec(nd.L), e: ax(nd.axis) + "<" + fc(nd.s) }, { ...spec(nd.R), e: "≥" + fc(nd.s) }] : null };
+  const steps = []; const shownBuild = () => { const s = new Set([root.id]); all.forEach(nd => { if (nd.parent && done.has(nd.parent.id)) s.add(nd.id); }); return s; };
+  const labNow = () => Object.fromEntries(all.map(nd => [nd.id, nd.leaf ? [set(nd.idx)] : done.has(nd.id) ? [ax(nd.axis) + " = " + fc(nd.s)] : [setShort(nd.idx)]]));
+  steps.push(mkStep({ q: false, title: "The data", text: `${n} points. A KD-tree splits the space with lines parallel to the axes, one coordinate at a time, at the median. Groups of ${LEAF} points or fewer become leaves.`, tree: { show: new Set(), st: {}, lab: {} } }));
+  const bfs = [root];
+  while (bfs.length) { const nd = bfs.shift(); if (nd.leaf) continue; done.add(nd.id); bfs.push(nd.L, nd.R);
+    const a = ax(nd.axis), ord = nd.sorted.map((i, p) => (p === nd.mid ? "| " : "") + nm(i) + fc(PT[i][nd.axis])).join(" ");
+    const leafNote = c => c.leaf ? " (leaf)" : "";
+    const b = nd.b; const tints = nd.axis === 0 ? [rect("ta", b.x0, b.y0, nd.s, b.y1, "tinta"), rect("tb", nd.s, b.y0, b.x1, b.y1, "tintb")] : [rect("ta", b.x0, b.y0, b.x1, nd.s, "tinta"), rect("tb", b.x0, nd.s, b.x1, b.y1, "tintb")];
+    const pm = {}; nd.L.idx.forEach(i => pm[nm(i)] = "ga"); nd.R.idx.forEach(i => pm[nm(i)] = "gb");
+    steps.push(mkStep({ q: false, title: `Split ${setShort(nd.idx)} on ${a} = ${fc(nd.s)}`,
+      text: `Group ${set(nd.idx)} (${nd.idx.length} points). Spread on x = ${fc(nd.ext[1])} − ${fc(nd.ext[0])} = <b>${fc(nd.sx)}</b>; spread on y = ${fc(nd.ext[3])} − ${fc(nd.ext[2])} = <b>${fc(nd.sy)}</b> → split on <b>${a}</b>${nd.sx === nd.sy ? " (tie → x)" : ""}. Sorted by ${a}: ${ord}. mid = ${nd.idx.length} // 2 = ${nd.mid} → the point at position ${nd.mid} is ${nm(nd.sorted[nd.mid])}, so the cut is <b>${a} = ${fc(nd.s)}</b>. Left (${a} &lt; ${fc(nd.s)} side): ${set(nd.L.idx)}${leafNote(nd.L)}; right: ${set(nd.R.idx)}${leafNote(nd.R)}.`,
+      shapes: [...tints, ...cuts()], pts: pm, tree: { show: shownBuild(), st: { [nd.id]: "cur" }, lab: labNow() } }));
+  }
+  const nLeaves = all.filter(x => x.leaf).length, depth = Math.max(...all.map(x => x.depth));
+  steps.push(mkStep({ q: false, title: "The tree is built", text: `${all.length - nLeaves} internal node${all.length - nLeaves === 1 ? "" : "s"}, ${nLeaves} leaves, depth ${depth}. Now the query arrives.`, shapes: cuts(), tree: { show: null, st: {}, lab: labNow() } }));
+  const queryStart = steps.length;
+  // ---- query
+  const best = new Best(k), measured = new Set(), pruned = new Set(), zones = [], st = {}; let count = 0;
+  const lab = labNow();
+  const push = (title, txt, extra = {}, cur = []) => steps.push(mkStep({ phase: "query", title, text: txt,
+    shapes: [...zones, ...(extra.pre || []), ...cuts(), ...tauC(best.tau()), ...distLines(best.idx(), cur), ...(extra.post || [])],
+    pts: ptsMap(best, measured, pruned), best: best.snap(), tau: tauTxt(best), count, tree: { show: null, st: { ...st, ...(extra.st || {}) }, lab } }));
+  const sub = nd => nd.leaf ? [nd] : [nd, ...sub(nd.L), ...sub(nd.R)];
+  const bRect = (id, b, cls) => rect(id, b.x0, b.y0, b.x1, b.y1, cls);
+  function visit(nd) {
+    if (nd.leaf) {
+      const lines = nd.idx.map(i => { const d = dist(Q, PT[i]); count++; measured.add(i); return `d(q,${nm(i)}) = √((${fc(Q[0])}−${fc(PT[i][0])})² + (${fc(Q[1])}−${fc(PT[i][1])})²) = <b>${f2(d)}</b>: ${best.offer(i, d)}`; });
+      st[nd.id] = "visit";
+      push(`Leaf ${set(nd.idx)}: measure`, lines.join("<br>") + `<br>best-${k} = [${best.list.map(e => nm(e[0]) + " " + f2(e[1])).join(", ")}], τ = ${tauTxt(best)}.`, { st: { [nd.id]: "cur" }, pre: [bRect("fz", nd.b, "focus")] }, nd.idx);
+      return;
+    }
+    const a = ax(nd.axis), diff = Q[nd.axis] - nd.s, near = diff < 0 ? nd.L : nd.R, far = diff < 0 ? nd.R : nd.L;
+    push(`Node ${a} = ${fc(nd.s)}: choose the near side`, `diff = q.${a} − ${fc(nd.s)} = ${fc(Q[nd.axis])} − ${fc(nd.s)} = <b>${sg(diff)}</b> → ${diff < 0 ? "negative → near side is the <b>left</b>" : "not negative → near side is the <b>right</b>"} child ${setShort(near.idx)}. Remember |diff| = ${f2(Math.abs(diff))} for the way back.`, { st: { [nd.id]: "cur" }, pre: [bRect("fz", near.b, "focus")] });
+    st[nd.id] = "visit"; visit(near);
+    const tau = best.tau(), go = !best.full() || Math.abs(diff) < tau;
+    const gapL = nd.axis === 0 ? line("gap", Q[0], Q[1], nd.s, Q[1], "gap") : line("gap", Q[0], Q[1], Q[0], nd.s, "gap");
+    if (go) {
+      push(`Back at ${a} = ${fc(nd.s)}: visit the far side`, best.full() ? `Is the cut closer than τ? |diff| = ${f2(Math.abs(diff))} &lt; τ = ${f2(tau)} → yes. The τ circle crosses the line, so ${setShort(far.idx)} could hold a closer point: <b>visit</b>.` : `best has fewer than ${k} points (τ = ∞), so nothing can be ruled out: <b>visit</b> ${setShort(far.idx)}.`, { st: { [nd.id]: "cur" }, pre: [bRect("fz", far.b, "focus")], post: [gapL] });
+      visit(far);
+    } else {
+      sub(far).forEach(x => { st[x.id] = "prune"; if (x.leaf) x.idx.forEach(i => pruned.add(i)); }); zones.push(bRect("pz" + far.id, far.b, "prunezone"));
+      push(`Back at ${a} = ${fc(nd.s)}: prune the far side`, `|diff| = ${f2(Math.abs(diff))} ≥ τ = ${f2(tau)}. Every point across the line ${a} = ${fc(nd.s)} is at least ${f2(Math.abs(diff))} away from q, so none can beat τ. <b>Prune</b> ${set(far.idx.length ? sub(far).filter(x => x.leaf).flatMap(x => x.idx) : [])}: never measured.`, { st: { [nd.id]: "cur" }, post: [gapL] });
+    }
+  }
+  visit(root);
+  best.idx().forEach(i => { const lf = all.find(x => x.leaf && x.idx.includes(i)); if (lf) st[lf.id] = "res"; });
+  push(`Result: ${best.list.map(e => nm(e[0])).join(", ")}`, `Top-${k}: ${best.list.map(e => `<b>${nm(e[0])} (${f2(e[1])})</b>`).join(", ")} with <b>${count} of ${n}</b> distances computed. ${verdict(best)} Rule used: skip the far side when <code>|q[axis] − split| ≥ τ</code>.`);
+  steps[steps.length - 1].phase = "result";
+  return { steps, trees: [spec(root)], queryStart, treeTitle: "KD-tree", finalize: () => { done.clear(); all.forEach(x => !x.leaf && done.add(x.id)); } };
+}
+
+/* ================= Ball tree ================= */
+function genBall() {
+  const n = PT.length, k = data.k; let nid = 0; const all = [];
+  function build(idx, depth, parent, side) {
+    const sx = idx.reduce((s, i) => s + PT[i][0], 0), sy = idx.reduce((s, i) => s + PT[i][1], 0);
+    const c = [sx / idx.length, sy / idx.length];
+    const far = idx.reduce((a, i) => dist(c, PT[i]) > dist(c, PT[a]) + 1e-12 ? i : a, idx[0]);
+    const node = { id: "b" + (nid++), idx, c, r: dist(c, PT[far]), far, sx, sy, depth, parent, side }; all.push(node);
+    if (idx.length <= LEAF) { node.leaf = true; return node; }
+    const p1 = far, p2 = idx.reduce((a, i) => dist(PT[p1], PT[i]) > dist(PT[p1], PT[a]) + 1e-12 ? i : a, idx[0]);
+    let L = [], R = []; node.assign = [];
+    idx.forEach(i => { const a = dist(PT[i], PT[p1]), b = dist(PT[i], PT[p2]); (a <= b ? L : R).push(i); if (i !== p1 && i !== p2) node.assign.push(`${nm(i)}→${nm(a <= b ? p1 : p2)} (${f2(a)} vs ${f2(b)})`); });
+    if (!L.length || !R.length) { const h = Math.floor(idx.length / 2); L = idx.slice(0, h); R = idx.slice(h); node.fallback = true; }
+    node.p1 = p1; node.p2 = p2;
+    node.L = build(L, depth + 1, node, 0); node.R = build(R, depth + 1, node, 1);
+    return node;
+  }
+  const root = build(PT.map((_, i) => i), 0, null, -1);
+  const labOf = nd => nd.leaf ? [set(nd.idx), "c=(" + f2(nd.c[0]) + ", " + f2(nd.c[1]) + ")", "r = " + f2(nd.r)] : [setShort(nd.idx), "c=(" + f2(nd.c[0]) +", " + f2(nd.c[1]) + ")", "r = " + f2(nd.r)];
+  const spec = nd => ({ id: nd.id, label: labOf(nd), kids: nd.leaf ? null : [spec(nd.L), spec(nd.R)] });
+  const labs = Object.fromEntries(all.map(nd => [nd.id, labOf(nd)]));
+  const ballCls = nd => nd.depth === 0 ? "ballroot" : nd.side === 0 ? "ball" : "ballb";
+  const ballOf = (nd, cls) => circ("bc" + nd.id, nd.c[0], nd.c[1], Math.max(nd.r, 0.12), cls || ballCls(nd));
+  const shown = new Set([root.id]);
+  const steps = [];
+  steps.push(mkStep({ q: false, title: "The data", text: `${n} points. A ball tree wraps groups of points in balls: centre c = average of the points, radius r = distance to the farthest point. Groups of ${LEAF} or fewer become leaves.`, tree: { show: new Set(), st: {}, lab: labs } }));
+  const bfs = [root];
+  while (bfs.length) { const nd = bfs.shift();
+    if (nd.leaf) continue; bfs.push(nd.L, nd.R); shown.add(nd.L.id); shown.add(nd.R.id);
+    const vis = all.filter(x => shown.has(x.id) && x.id !== nd.id).map(x => ballOf(x, x.depth === 0 ? "ballfaint" : (x.parent === nd ? ballCls(x) : "ballfaint")));
+    const pm = {}; nd.L.idx.forEach(i => pm[nm(i)] = "ga"); nd.R.idx.forEach(i => pm[nm(i)] = "gb"); pm[nm(nd.p1)] = "pair"; pm[nm(nd.p2)] = "pair";
+    const child = c => `${set(c.idx)}: c = (${f2(c.c[0])}, ${f2(c.c[1])}), r = ${f2(c.r)}${c.leaf ? " (leaf)" : ""}`;
+    steps.push(mkStep({ q: false, title: `Ball ${setShort(nd.idx)}: centre, radius, split`,
+      text: `Centre c = (Σx/n, Σy/n) = (${fc(nd.sx)}/${nd.idx.length}, ${fc(nd.sy)}/${nd.idx.length}) = <b>(${f2(nd.c[0])}, ${f2(nd.c[1])})</b>; radius r = distance to the farthest point ${nm(nd.far)} = <b>${f2(nd.r)}</b>. Split: p1 = farthest from c = <b>${nm(nd.p1)}</b>; p2 = farthest from ${nm(nd.p1)} = <b>${nm(nd.p2)}</b> (${f2(dist(PT[nd.p1], PT[nd.p2]))}). Each point joins the closer of the two (tie → p1): ${nd.assign.join(", ") || "—"}.${nd.fallback ? " All points coincide, so the group is split in halves." : ""} Children: ${child(nd.L)} and ${child(nd.R)}.`,
+      shapes: [...vis, ballOf(nd, nd.depth === 0 ? "ballroot" : "ballcur"), mark("m" + nd.id, nd.c[0], nd.c[1]), line("p12", PT[nd.p1][0], PT[nd.p1][1], PT[nd.p2][0], PT[nd.p2][1], "helper")], pts: pm,
+      tree: { show: new Set(shown), st: { [nd.id]: "cur" }, lab: labs } }));
+  }
+  const allBalls = () => all.filter(x => x.depth > 0).map(x => ballOf(x, "ballfaint"));
+  steps.push(mkStep({ q: false, title: "The tree is built", text: `${all.filter(x => !x.leaf).length} internal balls, ${all.filter(x => x.leaf).length} leaves. Now the query arrives.`, shapes: [ballOf(root, "ballroot"), ...allBalls()], tree: { show: null, st: {}, lab: labs } }));
+  const queryStart = steps.length;
+  const best = new Best(k), measured = new Set(), pruned = new Set(), st = {}, prunedBalls = new Set(); let count = 0;
+  const bound = nd => Math.max(0, dist(Q, nd.c) - nd.r);
+  const gapTo = nd => { const v = [nd.c[0] - Q[0], nd.c[1] - Q[1]], L = Math.hypot(...v) || 1, r = Math.min(nd.r, L), e = [nd.c[0] - v[0] / L * r, nd.c[1] - v[1] / L * r];
+    return dist(Q, nd.c) > nd.r ? [line("gap", Q[0], Q[1], e[0], e[1], "gap"), text("gapt", (Q[0] + e[0]) / 2, (Q[1] + e[1]) / 2, f2(bound(nd)), "lab", "start", 6, -6)] : [line("gap", Q[0], Q[1], nd.c[0], nd.c[1], "helper")]; };
+  const sub = nd => nd.leaf ? [nd] : [nd, ...sub(nd.L), ...sub(nd.R)];
+  const push = (title, txt, cur, extra = {}, curIdx = []) => steps.push(mkStep({ phase: "query", title, text: txt,
+    shapes: [ballOf(root, "ballfaint"), ...all.filter(x => x.depth > 0).map(x => ballOf(x, prunedBalls.has(x.id) ? "ballprune" : x === cur ? "ballcur" : "ballfaint")), ...(cur && cur.depth === 0 ? [ballOf(root, "ballroot")] : []), ...tauC(best.tau()), ...distLines(best.idx(), curIdx), ...(extra.post || [])],
+    pts: ptsMap(best, measured, pruned), best: best.snap(), tau: tauTxt(best), count, tree: { show: null, st: { ...st, ...(cur ? { [cur.id]: "cur" } : {}) }, lab: labs } }));
+  const bTxt = nd => `bound = max(0, d(q,c) − r) = max(0, ${f2(dist(Q, nd.c))} − ${f2(nd.r)}) = <b>${f2(bound(nd))}</b>`;
+  function visit(nd) {
+    const bd = bound(nd), tau = best.tau();
+    if (best.full() && bd >= tau) {
+      sub(nd).forEach(x => { st[x.id] = "prune"; prunedBalls.add(x.id); if (x.leaf) x.idx.forEach(i => pruned.add(i)); });
+      push(`Ball ${setShort(nd.idx)}: prune`, `${bTxt(nd)} ≥ τ = ${f2(tau)}. No point inside can be closer than ${f2(bd)}: <b>prune</b> ${set(nd.idx)}, never measured.`, nd, { post: gapTo(nd) });
+      return;
+    }
+    const why = best.full() ? `${bTxt(nd)} &lt; τ = ${f2(tau)} → <b>enter</b>.` : `${bTxt(nd)}; best is not full (τ = ∞) → <b>enter</b>.`;
+    if (nd.leaf) {
+      const lines = nd.idx.map(i => { const d = dist(Q, PT[i]); count++; measured.add(i); return `d(q,${nm(i)}) = <b>${f2(d)}</b>: ${best.offer(i, d)}`; });
+      st[nd.id] = "visit";
+      push(`Leaf ${set(nd.idx)}: enter and measure`, `${why}<br>${lines.join("<br>")}<br>τ is now ${tauTxt(best)}.`, nd, { post: gapTo(nd) }, nd.idx);
+      return;
+    }
+    const kids = [nd.L, nd.R].sort((a, b) => bound(a) - bound(b));
+    st[nd.id] = "visit";
+    push(`Ball ${setShort(nd.idx)}: enter, order the children`, `${why} Children bounds: ${kids.map(c => `${setShort(c.idx)} = ${f2(dist(Q, c.c))} − ${f2(c.r)} → <b>${f2(bound(c))}</b>`).join("; ")}. Visit the smaller bound first: <b>${setShort(kids[0].idx)}</b>.`, nd, { post: gapTo(nd) });
+    kids.forEach(visit);
+  }
+  visit(root);
+  best.idx().forEach(i => { const lf = all.find(x => x.leaf && x.idx.includes(i)); if (lf) st[lf.id] = "res"; });
+  push(`Result: ${best.list.map(e => nm(e[0])).join(", ")}`, `Top-${k}: ${best.list.map(e => `<b>${nm(e[0])} (${f2(e[1])})</b>`).join(", ")} with <b>${count} of ${n}</b> real distances (plus distances to ball centres, the overhead). ${verdict(best)} Rule used: skip a ball when <code>max(0, d(q,c) − r) ≥ τ</code>.`, null);
+  steps[steps.length - 1].phase = "result";
+  return { steps, trees: [spec(root)], queryStart, treeTitle: "Ball tree" };
+}
+
+
+const GEN = { kd: genKD, ball: genBall };
+const NAMES = { kd: "KD-tree", ball: "Ball tree"};
+
+/* ================= plane rendering ================= */
+const plane = document.getElementById("plane");
+const gGrid = el("g", {}, plane), gShapes = el("g", {}, plane), gPts = el("g", {}, plane), gTop = el("g", {}, plane);
+for (let i = 0; i <= 10; i++) {
+  el("line", { x1: X(i), y1: Y(0), x2: X(i), y2: Y(10), class: "gridl" }, gGrid);
+  el("line", { x1: X(0), y1: Y(i), x2: X(10), y2: Y(i), class: "gridl" }, gGrid);
+  el("text", { x: X(i), y: Y(0) + 18, class: "axis", "text-anchor": "middle" }, gGrid).textContent = i;
+  if (i > 0) el("text", { x: X(0) - 8, y: Y(i) + 4, class: "axis", "text-anchor": "end" }, gGrid).textContent = i;
+}
+el("rect", { x: X(0), y: Y(10), width: 10 * S, height: 10 * S, class: "frame" }, gGrid);
+const cp = el("clipPath", { id: "planeClip" }, el("defs", {}, plane)); el("rect", { x: X(0), y: Y(10), width: 10 * S, height: 10 * S }, cp);
+gShapes.setAttribute("clip-path", "url(#planeClip)");
+const star = (cx, cy, R = 15, r = 6.5) => { let s = ""; for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r : R; s += `${cx + rr * Math.cos(a)},${cy + rr * Math.sin(a)} `; } return s; };
+const qStar = el("polygon", { class: "qstar" }, gTop), qLab = el("text", { class: "qlabel" }, gTop); qLab.textContent = "q";
+let ptEls = [];
+const live = new Map();
+function drawPoints() {
+  gPts.innerHTML = ""; ptEls = PT.map((p, i) => [el("circle", { cx: X(p[0]), cy: Y(p[1]), r: 7.5, class: "pt n" }, gPts), Object.assign(el("text", { x: X(p[0]) + 9, y: Y(p[1]) - 9, class: "ptl" }, gPts), { textContent: nm(i) })]);
+  qStar.setAttribute("points", star(X(Q[0]), Y(Q[1]))); qLab.setAttribute("x", X(Q[0]) - 24); qLab.setAttribute("y", Y(Q[1]) + 22);
+}
+function attrsFor(s) {
+  switch (s.t) {
+    case "line": return { tag: "line", a: { x1: X(s.x1), y1: Y(s.y1), x2: X(s.x2), y2: Y(s.y2), pathLength: 1 }, enter: "enter-line" };
+    case "circle": return { tag: "circle", a: {}, style: { cx: X(s.cx) + "px", cy: Y(s.cy) + "px", r: s.r * S + "px" }, enter: "enter-pop" };
+    case "rect": return { tag: "rect", a: { x: X(s.x0), y: Y(s.y1), width: Math.max(0, (s.x1 - s.x0) * S), height: Math.max(0, (s.y1 - s.y0) * S) }, enter: "enter-fade" };
+    case "poly": return { tag: "polygon", a: { points: s.pts.map(p => `${X(p[0])},${Y(p[1])}`).join(" ") }, enter: "enter-fade" };
+    case "text": return { tag: "text", a: { x: X(s.x) + (s.dx || 0), y: Y(s.y) + (s.dy || 0), "text-anchor": s.anchor }, enter: "enter-fade", txt: s.s };
+    case "mark": { const x = X(s.x), y = Y(s.y); return { tag: "path", a: { d: `M${x - 6},${y - 6}L${x + 6},${y + 6}M${x - 6},${y + 6}L${x + 6},${y - 6}` }, cls: "cmark", enter: "enter-fade" }; }
+  }
+}
+function renderPlane(step, animate) {
+  const want = new Set(step.shapes.map(s => s.id));
+  for (const [id, node] of live) if (!want.has(id)) { live.delete(id); if (animate) { node.classList.add("leaving"); setTimeout(() => node.remove(), 380); } else node.remove(); }
+  step.shapes.forEach(s => { const spec = attrsFor(s); if (!spec) return; let node = live.get(s.id);
+    const cls = "sh " + (spec.cls || s.cls);
+    if (node && node.tagName !== spec.tag) { node.remove(); live.delete(s.id); node = null; }
+    if (!node) { node = el(spec.tag, {}, gShapes); live.set(s.id, node); node.setAttribute("class", cls + (animate ? " " + spec.enter : "")); } else node.setAttribute("class", cls);
+    for (const k in spec.a) node.setAttribute(k, spec.a[k]);
+    if (spec.style) for (const k in spec.style) node.style[k] = spec.style[k];
+    if (spec.txt != null) node.textContent = spec.txt; });
+  [...gShapes.children].filter(n => n.tagName === "rect" || n.tagName === "polygon").forEach(n => gShapes.insertBefore(n, gShapes.firstChild));
+  [...gShapes.children].filter(n => n.tagName === "text").forEach(n => gShapes.appendChild(n));
+  PT.forEach((_, i) => { const c = step.pts[nm(i)] || "n"; ptEls[i][0].setAttribute("class", "pt " + c); ptEls[i][1].setAttribute("class", "ptl " + c); });
+  qStar.style.display = qLab.style.display = step.q ? "" : "none";
+}
+
+/* ================= tree rendering ================= */
+const treeSvg = document.getElementById("tree");
+function layoutTrees(trees) {
+  const pos = {}, edges = []; let leafX = 0;
+  trees.forEach((t, ti) => { if (ti > 0) leafX += 0.7;
+    (function lay(n, depth, parent) { let x;
+      if (!n.kids) x = leafX++; else { const xs = n.kids.map(k => lay(k, depth + 1, n)); x = (xs[0] + xs[xs.length - 1]) / 2; }
+      pos[n.id] = { x, depth, n, tree: ti }; if (parent) edges.push([parent.id, n.id, n.e || ""]); return x; })(t, 0, null); });
+  const maxD = Math.max(...Object.values(pos).map(p => p.depth)), LW = 72, LH = 62;
+  const W = Math.max(560, leafX * LW + 30), H = 46 + maxD * LH + 40;
+  for (const id in pos) { pos[id].px = 20 + (pos[id].x + 0.5) * ((W - 40) / Math.max(1, leafX)); pos[id].py = 36 + pos[id].depth * LH; }
+  return { pos, edges, W, H, roots: trees.map(t => t.id) };
+}
+let TL = null;
+function renderTree(step) {
+  const t = step.tree, show = t.show;
+  treeSvg.setAttribute("viewBox", `0 0 ${TL.W} ${TL.H}`); treeSvg.style.minWidth = Math.round(TL.W * 0.8) + "px"; treeSvg.innerHTML = "";
+  if (TL.roots.length > 1) TL.roots.forEach((r, i) => { el("text", { x: TL.pos[r].px, y: 13, class: "ttitle", "text-anchor": "middle" }, treeSvg).textContent = "TREE " + (i + 1); });
+  const vis = id => !show || show.has(id);
+  TL.edges.forEach(([a, b, e]) => { if (!vis(a) || !vis(b)) return; const A = TL.pos[a], B = TL.pos[b], sb = t.st[b];
+    el("line", { x1: A.px, y1: A.py + 14, x2: B.px, y2: B.py - 14, class: "tedge" + (sb && !["queued", "prune"].includes(sb) ? " on" : "") + (sb === "prune" ? " off" : "") }, treeSvg);
+    if (e) el("text", { x: (A.px + B.px) / 2 + (B.px < A.px ? -5 : 5), y: (A.py + B.py) / 2, class: "elab", "text-anchor": B.px < A.px ? "end" : "start" }, treeSvg).textContent = e; });
+  for (const id in TL.pos) { if (!vis(id)) continue; const p = TL.pos[id]; const lab = (t.lab && t.lab[id]) || p.n.label;
+    const w = Math.max(...lab.map(s => s.length)) * 7 + 14, h = lab.length * 14 + 10;
+    const g = el("g", { class: "tnode " + (t.st[id] || "") }, treeSvg);
+    el("rect", { x: p.px - w / 2, y: p.py - h / 2, width: w, height: h, rx: 7 }, g);
+    lab.forEach((s, i) => { el("text", { x: p.px, y: p.py - h / 2 + 16 + i * 14, "text-anchor": "middle" }, g).textContent = s; }); }
+}
+
+/* ================= state panel ================= */
+const stateBox = document.getElementById("state");
+function renderState(step) {
+  if (step.queue || step.cands) {
+    document.getElementById("stateTitle").textContent = "Priority queue (highest first) and candidates";
+    const q = step.queue || [], rows = q.slice(0, 8).map((r, i) => `<tr class="${i === 0 ? "top" : ""}"><td>${r[0]}</td><td>${r[1]}</td><td class="num">${r[2]}</td></tr>`).join("") + (q.length > 8 ? `<tr><td colspan="3" class="hint">… ${q.length - 8} more</td></tr>` : "");
+    const bestHtml = step.best ? `<div class="best" style="margin-top:8px">${step.best.map((b, i) => `<div class="slot filled"><span><span class="lbl">#${i + 1}</span> ${nm(b[0])}</span><span>${f2(b[1])}</span></div>`).join("")}</div>` : "";
+    stateBox.innerHTML = (q.length ? `<div style="overflow-x:auto"><table class="queue"><thead><tr><th>tree</th><th>node</th><th style="text-align:right">priority</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="hint">${(step.cands || []).length ? "Search stopped." : "Queue empty."}</div>`)
+      + `<div class="cands">candidates: [${(step.cands || []).join(", ")}]</div>` + bestHtml;
+    return;
+  }
+  document.getElementById("stateTitle").textContent = "Search state";
+  if (!step.best) { stateBox.innerHTML = `<div class="hint">The search state appears once the query arrives. During the build, follow the cuts in the space and the tree growing above.</div>`; return; }
+  const slots = Array.from({ length: data.k }, (_, i) => step.best[i] ? `<div class="slot filled"><span><span class="lbl">#${i + 1}</span> ${nm(step.best[i][0])}</span><span>${f2(step.best[i][1])}</span></div>` : `<div class="slot"><span class="lbl">#${i + 1} empty</span></div>`).join("");
+  stateBox.innerHTML = `<div class="state"><div class="best"><div class="hint">best-${data.k} so far</div>${slots}</div>
+    <div style="display:flex;flex-direction:column;gap:10px"><div class="metric"><div class="k">τ (worst of best-${data.k})</div><div class="v">${step.tau}</div></div>
+    <div class="metric"><div class="k">distances computed</div><div class="v">${step.count} <span class="hint">/ ${PT.length}</span></div></div></div></div>`;
+}
+
+/* ================= data editor ================= */
+const $ = id => document.getElementById(id);
+const clamp = v => Math.min(10, Math.max(0, Math.round(v * 10) / 10));
+function msg(t, err) { $("msg").textContent = t; $("msg").className = "msg" + (err ? " err" : ""); }
+function save() { try { localStorage.setItem("tsa-data", JSON.stringify(data)); } catch (e) {} }
+function renderEditor() {
+  const chips = $("chips"); chips.innerHTML = "";
+  const qc = document.createElement("span"); qc.className = "chip qchip";
+  qc.innerHTML = `<b>q</b><input id="qx" type="number" step="0.1" min="0" max="10" value="${data.q[0]}" aria-label="q x"><input id="qy" type="number" step="0.1" min="0" max="10" value="${data.q[1]}" aria-label="q y">`;
+  chips.appendChild(qc);
+  data.pts.forEach((p, i) => { const c = document.createElement("span"); c.className = "chip";
+    c.innerHTML = `<b>${nm(i)}</b><input id="px-${i}" type="number" step="0.1" min="0" max="10" value="${p[0]}" aria-label="${nm(i)} x"><input id="py-${i}" type="number" step="0.1" min="0" max="10" value="${p[1]}" aria-label="${nm(i)} y"><button data-del="${i}" aria-label="Remove ${nm(i)}">✕</button>`;
+    chips.appendChild(c); });
+  chips.querySelectorAll("input").forEach(inp => inp.addEventListener("change", () => {
+    let v = parseFloat(inp.value); if (isNaN(v)) { msg("Enter a number between 0 and 10.", true); renderEditor(); return; }
+    if (v < 0 || v > 10) msg("Coordinates must be between 0 and 10; the value was clamped.", true); else msg("Leaves hold at most 2 points. Coordinates are rounded to 0.1.");
+    v = clamp(v); const id = inp.id;
+    if (id === "qx") data.q[0] = v; else if (id === "qy") data.q[1] = v;
+    else { const [ax, i] = id.split("-"); data.pts[+i][ax === "px" ? 0 : 1] = v; }
+    changed(); }));
+  chips.querySelectorAll("button[data-del]").forEach(b => b.addEventListener("click", () => { if (data.pts.length <= 1) { msg("Keep at least 1 point.", true); return; } data.pts.splice(+b.dataset.del, 1); changed(); }));
+  $("npts").textContent = `${data.pts.length} / ${MAXP} points`;
+  $("addPt").disabled = data.pts.length >= MAXP;
+  const kSel = $("kSel"), kmax = Math.min(5, data.pts.length); data.k = Math.min(Math.max(1, data.k), kmax);
+  kSel.innerHTML = Array.from({ length: kmax }, (_, i) => `<option ${i + 1 === data.k ? "selected" : ""}>${i + 1}</option>`).join("");
+}
+function renderTruth() {
+  const tr = truth();
+  $("truth").innerHTML = `Brute force from q = (${fc(Q[0])}, ${fc(Q[1])}): ` + tr.map((t, i) => i < data.k ? `<b>${nm(t[0])} ${f2(t[1])}</b>` : `${nm(t[0])} ${f2(t[1])}`).join(" · ") + ` &nbsp;→ true top-${data.k} in bold.`;
+}
+function changed() { stop(); save(); renderEditor(); regenerate(); }
+$("addPt").onclick = () => { if (data.pts.length >= MAXP) return msg(`At most ${MAXP} points.`, true); data.pts.push([clamp(Math.random() * 10), clamp(Math.random() * 10)]); changed(); };
+$("randPts").onclick = () => { const n = 6 + Math.floor(Math.random() * 7); data.pts = Array.from({ length: n }, () => [clamp(0.5 + Math.random() * 9), clamp(0.5 + Math.random() * 9)]); data.q = [clamp(1 + Math.random() * 8), clamp(1 + Math.random() * 8)]; changed(); };
+$("labEx").onclick = () => { data.pts = LAB.pts.map(p => p.slice()); data.q = LAB.q.slice(); data.k = 2; data.trees = 2; data.searchK = 0; data.seed = 3; changed(); };
+$("clearPts").onclick = () => { data.pts = [[5, 5]]; changed(); msg("Cleared. Click on the space to add points (up to 16)."); };
+$("kSel").onchange = e => { data.k = +e.target.value; changed(); };
+let clickMode = "add";
+$("modeAdd").onclick = () => { clickMode = "add"; $("modeAdd").setAttribute("aria-pressed", "true"); $("modeQ").setAttribute("aria-pressed", "false"); };
+$("modeQ").onclick = () => { clickMode = "q"; $("modeQ").setAttribute("aria-pressed", "true"); $("modeAdd").setAttribute("aria-pressed", "false"); };
+plane.addEventListener("click", e => {
+  const pt = plane.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY; const loc = pt.matrixTransform(plane.getScreenCTM().inverse());
+  const x = (loc.x - PAD) / S, y = 10 - (loc.y - PAD) / S; if (x < -0.2 || x > 10.2 || y < -0.2 || y > 10.2) return;
+  const p = [Math.min(10, Math.max(0, Math.round(x * 2) / 2)), Math.min(10, Math.max(0, Math.round(y * 2) / 2))];
+  if (clickMode === "q") { data.q = p; changed(); msg(`q moved to (${p[0]}, ${p[1]}).`); return; }
+  if (data.pts.length >= MAXP) return msg(`At most ${MAXP} points. Remove one first.`, true);
+  data.pts.push(p); changed(); msg(`Added ${nm(data.pts.length - 1)} at (${p[0]}, ${p[1]}). Clicks snap to 0.5.`);
+});
+
+/* ================= controller ================= */
+let alg = "kd", RUN = null, idx = 0, timer = null;
+function regenerate() {
+  PT = data.pts.map(p => p.slice()); Q = data.q.slice();
+  drawPoints(); renderTruth();
+  RUN = GEN[alg](); if (RUN.finalize) RUN.finalize();
+  TL = layoutTrees(RUN.trees); $("treeTitle").textContent = RUN.treeTitle;
+  for (const [, n] of live) n.remove(); live.clear(); show(0, false);
+}
+function show(i, animate = true) {
+  const steps = RUN.steps; idx = Math.max(0, Math.min(steps.length - 1, i)); const s = steps[idx];
+  $("phase").textContent = s.phase === "build" ? "Build" : s.phase === "query" ? "Query" : "Result";
+  $("phase").className = "phase " + (s.phase === "build" ? "" : s.phase);
+  $("stepTitle").textContent = s.title; $("stepText").innerHTML = s.text;
+  $("counter").textContent = `${idx + 1} / ${steps.length}`; $("scrub").max = steps.length - 1; $("scrub").value = idx;
+  $("prev").disabled = $("first").disabled = idx === 0; $("next").disabled = idx === steps.length - 1;
+  $("planeTag").textContent = NAMES[alg] + " · step " + (idx + 1);
+  renderPlane(s, animate); renderTree(s); renderState(s);
+}
+function setAlg(a) { stop(); alg = a;
+  document.querySelectorAll(".tab").forEach(t => t.setAttribute("aria-selected", t.dataset.alg === a ? "true" : "false"));
+  regenerate(); try { localStorage.setItem("tsa-alg", a); } catch (e) {}
+  if (location.hash !== "#" + a) history.replaceState(null, "", "#" + a); }
+function play() { if (timer) return stop(); if (idx === RUN.steps.length - 1) show(0); $("play").textContent = "❚❚ Pause"; tick(); }
+function tick() { timer = setTimeout(() => { if (idx < RUN.steps.length - 1) { show(idx + 1); tick(); } else stop(); }, +$("speedSel").value); }
+function stop() { clearTimeout(timer); timer = null; $("play").textContent = "▶ Play"; }
+$("next").onclick = () => { stop(); show(idx + 1); };
+$("prev").onclick = () => { stop(); show(idx - 1); };
+$("first").onclick = () => { stop(); show(0); };
+$("toQuery").onclick = () => { stop(); show(RUN.queryStart); };
+$("play").onclick = play;
+$("scrub").oninput = e => { stop(); show(+e.target.value); };
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => setAlg(t.dataset.alg));
+document.addEventListener("keydown", e => {
+  if (["SELECT", "INPUT", "TEXTAREA"].includes(e.target.tagName)) return;
+  if (e.key === "ArrowRight") { stop(); show(idx + 1); } else if (e.key === "ArrowLeft") { stop(); show(idx - 1); }
+  else if (e.key === " ") { e.preventDefault(); play(); } });
+window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (GEN[h] && h !== alg) setAlg(h); });
+renderEditor();
+let startAlg = location.hash.slice(1);
+if (!GEN[startAlg]) { try { startAlg = localStorage.getItem("tsa-alg"); } catch (e) {} }
+setAlg(GEN[startAlg] ? startAlg : "kd");
+})();
+</script>
+
+</body></html>
