@@ -1,1 +1,5 @@
-theme: jekyll-theme-minimal
+# Theme of the website
+theme: jekyll-theme-cayman
+
+# Title of the website
+title: Information Retrieval course 2026
